@@ -6,245 +6,218 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import type { PropsWithChildren } from 'react';
 import {
-  NativeEventEmitter,
-  NativeModules,
-  Platform,
+  Button,
+  FlatList,
+  Linking,
+  Modal,
   SafeAreaView,
   ScrollView,
+  StyleSheet,
   Text,
+  TextInput,
+  TouchableOpacity,
   useColorScheme,
   View,
-  PermissionsAndroid
 } from 'react-native';
 
-import {
-  Colors,
-} from 'react-native/Libraries/NewAppScreen';
+import {Colors} from 'react-native/Libraries/NewAppScreen';
+import { useCallback } from 'react';
 
-import { VitalCore } from "@tryvital/vital-core-react-native";
-import { HealthConfig, VitalHealth, VitalHealthEvents, VitalHealthReactNativeModule, VitalResource } from '@tryvital/vital-health-react-native';
-import { VitalClient } from '@tryvital/vital-node';
-import { VITAL_API_KEY, VITAL_ENVIRONMENT, VITAL_REGION, VITAL_USER_ID } from './Environment';
-import { Brand, Cancellable, DeviceKind, DeviceModel, VitalDevicesManager } from '@tryvital/vital-devices-react-native';
-import { check, request,PERMISSIONS, requestMultiple, RESULTS } from 'react-native-permissions';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useVitalLink } from '@tryvital/vital-link';
 
-const { VitalDevicesReactNative } = NativeModules;
+const API_URL = "https://be4care-vital.herokuapp.com"
 
-export const vitalNodeClient = new VitalClient({
-  environment: VITAL_ENVIRONMENT,
-  api_key: VITAL_API_KEY,
-  region: VITAL_REGION,
-});
+// const userKey = '4f60d2b4-e279-46bc-8ed0-81b55255d73c';
+const userKey = '8181c51a-529d-4d18-856e-60777264005a';
 
-VitalHealth.configureClient(
-  VITAL_API_KEY,
-  VITAL_ENVIRONMENT,
-  VITAL_REGION,
-  true,
-).then(() => {
-  VitalHealth.configure(new HealthConfig()).then(() => {
-    VitalHealth.setUserId(VITAL_USER_ID)
-      .then(() => {
-        VitalHealth.askForResources([VitalResource.Steps])
-          .then(() => {
-            VitalHealth.syncData([VitalResource.Steps])
-              .then(() => {
-                console.log('VitalHealth synced data');
-              })
-              .catch((error: any) => {
-                console.error(error);
-              });
-          })
-          .catch((error: any) => {
-            console.error(error);
-          });
-      })
-      .catch((error: any) => {
-        console.error(error);
-      });
-  });
-});
+// export const VITAL_API_KEY = 'sk_us_CBAcPPiwDnporPRIFCZRqKwrHYKU4Rw3Yc4ez6_zDuI';
 
-const healthEventEmitter = new NativeEventEmitter(VitalHealthReactNativeModule);
+const getTokenFromBackend = async (userKey: string, env: string) => {
+  const resp = await fetch(`${API_URL}/token/${userKey}`);
+  const data = await resp.json();
+  return data;
+  // const resp = await fetch(API_URL)
+  // return await resp.json()
+}
 
-healthEventEmitter.addListener(VitalHealthEvents.statusEvent, (event: any) => {
-  console.log("addListener",VitalHealthEvents);
-  // console.log("VitalHealthEvents.statusEvent",VitalHealthEvents.statusEvent);
-  // console.log("event", event);
-  // console.log("addListener_VitalHealthEvents.statusEvent, event",VitalHealthEvents.statusEvent, event);
-});
-
-const vitalDevicesManager = new VitalDevicesManager((module) => new NativeEventEmitter(module));
-
-let bleSimulator: DeviceModel = {
-  id: (Platform.OS == "ios" ? '$vital_ble_simulator$' : '_vital_ble_simulator_'),
-  name: 'Vital BLE Simulator',
-  brand: Brand.AccuChek,
-  kind: DeviceKind.GlucoseMeter,
-};
-
-// async function requestBluetoothScanPermission() {
-//   try {
-//     if (Platform.OS == 'android') {
-//       const granted = await PermissionsAndroid.request(
-//         PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION
-//       );
-//       if (granted === PermissionsAndroid.RESULTS.GRANTED) {
-//         console.log('ACCESS_COARSE_LOCATION',PermissionsAndroid.RESULTS.GRANTED);
-//       } else {
-//         console.log('ACCESS_COARSE_LOCATION false');
-//       }
-//     } else {
-//       console.log('Dispositivo != android');
-//     }
-//   } catch (error) {
-//     console.error('Error al solicitar permiso ACCESS_COARSE_LOCATION', error);
-//   }
-// }
-
-
-
-// async function requestBluetoothScanPermission() {
-//   try {
-//     const result = await check(
-//       Platform.OS === 'android'
-//         ? PERMISSIONS.ANDROID.ACCESS_COARSE_LOCATION
-//         : PERMISSIONS.IOS.BLUETOOTH_PERIPHERAL,
-//     );
-//     if (result === RESULTS.GRANTED) {
-//       console.log('Permiso ACCESS_COARSE_LOCATION otorgado');
-//     }else if(result == 'denied'){
-//       const result = await request(PERMISSIONS.ANDROID.ACCESS_COARSE_LOCATION);
-//       if (result === RESULTS.GRANTED) {
-//         console.log('Permiso ACCESS_COARSE_LOCATION otorgado');
-//       }else{
-//         console.log('Permiso ACCESS_COARSE_LOCATION NOO otorgado result->', result);
-//       }
-//     }
-//   } catch (error) {
-//     console.error('Error al solicitar permiso ACCESS_COARSE_LOCATION', error);
-//   }
-// }
-
-
-const bluetoothPermission = Platform.OS === 'android' ? PERMISSIONS.ANDROID.ACCESS_COARSE_LOCATION : PERMISSIONS.IOS.BLUETOOTH_PERIPHERAL;
-
-check(bluetoothPermission)
-  .then((result) => {
-    switch (result) {
-      case RESULTS.UNAVAILABLE:
-        console.log('Permiso no disponible en este dispositivo');
-        break;
-      case RESULTS.DENIED:
-        console.log('Permiso denegado, solicitando permiso...');
-        requestPermission();
-        break;
-      case RESULTS.GRANTED:
-        console.log('Permiso concedido 11');
-        break;
-      case RESULTS.BLOCKED:
-        console.log('El permiso ha sido bloqueado, deberías habilitarlo manualmente');
-        break;
-    }
-  })
-  .catch((error) => console.log(error));
-
-
-  const requestPermission = () => {
-    request(bluetoothPermission)
-      .then((result) => {
-        switch (result) {
-          case RESULTS.UNAVAILABLE:
-            console.log('Permiso no disponible en este dispositivo');
-            break;
-          case RESULTS.DENIED:
-            console.log('Permiso denegado');
-            break;
-          case RESULTS.GRANTED:
-            console.log('Permiso concedido 22');
-            break;
-          case RESULTS.BLOCKED:
-            console.log('El permiso ha sido bloqueado, deberías habilitarlo manualmente');
-            break;
-          default:
-            console.log('Permiso default', result);
-
-        }
-      })
-      .catch((error) => console.log(error));
-  };
-  
-
-requestMultiple([
-  PERMISSIONS.ANDROID.BLUETOOTH_SCAN,
-]).then(statuses => {
-  console.log("statuses",statuses);
-  if (
-      statuses[PERMISSIONS.ANDROID.BLUETOOTH_SCAN ] === 'granted'
-  ) {
-    console.log("@@@ Start1 scanning for device type: " + bleSimulator.name)
-
-    var scanner: Cancellable | null
-    scanner = vitalDevicesManager.scanForDevice(
-      bleSimulator,
-      {
-        onDiscovered: (device) => {
-          console.log("@@@2 Discovered device: " + device.name + " (id = " + device.id + ")")
-          scanner?.cancel()
-
-          console.log("@@@3 Start pairing device: " + device.name + " (id = " + device.id + ")")
-          vitalDevicesManager.pairDevice(device.id)
-            .then(() => {
-              console.log("@@@4 Successfully paired device: " + device.name + " (id = " + device.id + ")")
-              console.log("@@@5 Start reading from device: " + device.name + " (id = " + device.id + ")")
-
-              return vitalDevicesManager.readGlucoseMeter(device.id)
-            })
-            .then((samples) => {
-              console.log("@@@6 Read " + samples.length + " samples from device: " + device.name + " (id = " + device.id + ")")
-              console.log(samples)
-            })
-            .catch((error) => console.log('1',error))
-        },
-        onError: (error) => console.log('2',error)
-      }
-    )
-  }
-});
-
-const Stack = createNativeStackNavigator();
 
 function App(): JSX.Element {
+  const [showModal, setShowModal] = useState(false);
   const isDarkMode = useColorScheme() === 'dark';
+  const [isLoading, setLoading] = useState(false);
+  const [newData, setNewData] = useState([]);
+  const [newData2, setNewData2] = useState([]);
+  const [nombre, setNombre] = useState("");
 
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
+  const onSuccess = useCallback(metadata => {
+    // Device is now connected.
+  }, []);
+
+  const onExit = useCallback(metadata => {
+    // User has quit the link flow.
+  }, []);
+
+  const onError = useCallback(metadata => {
+    // Error encountered in connecting device.
+  }, []);
+
+  const config = {
+    onSuccess,
+    onExit,
+    onError,
+    env: "sandbox"
   };
 
-  const [isVitalReady, setIsVitalReady] = useState(false);
+  const { open, ready, error } = useVitalLink(config);
 
-  // useEffect(() => {
-  //   requestBluetoothPermission();
-  //   console.log('useEffect')
-  // }, []);
+
+  const handleVitalOpen = async () => {
+    setLoading(true);
+    const token = await getTokenFromBackend(userKey, "sandbox");
+    const url = `https://link.tryvital.io/?token=${token.link_token}&origin=http://localhost:3000&env=sandbox&region=us`;
+    await Linking.openURL(url);
+    setLoading(false);
+  };
+
+
+  const VitalAnalize = async () => {
+    setLoading(true);
+    const resp = await fetch(`${API_URL}/summary/activity/${userKey}?start_date=2023-04-01T19:48:37.078Z&end_date=2023-04-11T19:48:37.078Z`);
+    const data = await resp.json();
+      // Organizar datos
+    const summary = data.activity;
+    const newData = [];
+    summary.forEach(item => {
+      const newItem = {
+        calendar_date: item.calendar_date,
+        date: item.calendar_date,
+        steps: item.steps,
+        distance: item.distance,
+        calories_active: item.calories_active,
+        calories_total: item.calories_total,
+        platform: item.source.name
+      };
+      newData.push(newItem);
+    });
+
+    // Usar los datos organizados
+    console.log("newData", newData);
+    setNewData(newData);
+    setLoading(false);
+    setLoading(false);
+  };
+
+  const VitalAnalizeData = async () => {
+    setLoading(true);
+    const resp = await fetch(`${API_URL}/summary/${userKey}?start_date=2023-04-01T19:48:37.078Z&end_date=2023-04-11T19:48:37.078Z`);
+    const data = await resp.json();
+      // Organizar datos
+    const summary = data.activity;
+    console.log("summary",summary)
+    // const newData2 = [];
+    // summary.forEach(item => {
+    //   const newItem = {
+    //     calendar_date: item.calendar_date,
+    //     date: item.calendar_date,
+    //     steps: item.steps,
+    //     distance: item.distance,
+    //     calories_active: item.calories_active,
+    //     calories_total: item.calories_total,
+    //     platform: item.source.name
+    //   };
+    //   newData2.push(newItem);
+    // });
+
+    // // Usar los datos organizados
+    // console.log("newData2", newData2);
+    setNewData(newData2);
+    setLoading(false);
+    setLoading(false);
+  };
+  // 
+
+  const CreateUserVital = async (nombre) => {
+    const resp = await fetch(`${API_URL}/user/`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({"client_user_id":nombre}),
+    });
+    console.log("resp", resp);
+    if(resp.status === 200){
+      setShowModal(false)
+      setNombre('')
+    }
+    const data = await resp.json();
+    console.log("data", data);
+    return data;
+  };
+  
+      
+  useEffect(() => {
+    console.log('useEffect')
+    // handleVitalOpen();
+  }, []);
 
   return (
-    <SafeAreaView style={backgroundStyle}>
-      <ScrollView
-        style={backgroundStyle}>
+    <SafeAreaView>
+      <ScrollView>
         <View
           style={{
             backgroundColor: isDarkMode ? Colors.black : Colors.white,
           }}>
-          <Text>Hola mundo</Text>
+           <Text numberOfLines={1}>{"\n"}</Text>
+           <Text style={styles.texto}>Hi Humans</Text>
+           <Button title="Crear nuevo usuario" onPress={() => setShowModal(true)} />
+           <Text numberOfLines={1}>{"\n"}</Text>
+           <Button title="Conectar dispositivo" onPress={handleVitalOpen} />
+           <Text numberOfLines={1}>{"\n"}</Text>
+           <Button title="Ver datos completos" onPress={VitalAnalizeData} />
+           <Text numberOfLines={1}>{"\n"}</Text>
+           <Button  title="Ver actividad" onPress={VitalAnalize} />
+           <Text numberOfLines={1}>{"\n"}</Text>
+           <FlatList
+              data={newData}
+              renderItem={({ item }) => (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text>{item.calendar_date}</Text>
+                  <Text>{item.calories_active}</Text>
+                  <Text>{item.steps}</Text>
+                  <Text>{item.platform}</Text>
+                </View>
+              )}
+              keyExtractor={(item, index) => index.toString()}
+            />
+
+            <Modal visible={showModal}>
+              <View>
+                <Text>Ingrese los datos:</Text>
+                <TextInput placeholder="Nombre" onChangeText={text => setNombre(text)} />
+                <Button title="Enviar" onPress={() => CreateUserVital(nombre)} />
+                <Button title="Cancelar" onPress={() => setShowModal(false)} />
+              </View>
+            </Modal>
+
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  texto: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  });
 
 export default App;
+
