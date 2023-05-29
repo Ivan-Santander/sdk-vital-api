@@ -81,7 +81,7 @@ const vitalDevicesManager = new VitalDevicesManager((module) => new NativeEventE
 
 let bleSimulator: DeviceModel = {
   id: (Platform.OS == "ios" ? '$vital_ble_simulator$' : '_vital_ble_simulator_'),
-  name: 'Vital BLE Simulator',
+  name: ' Health',
   brand: Brand.AccuChek,
   kind: DeviceKind.GlucoseMeter,
 };
